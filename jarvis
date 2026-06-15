@@ -1,0 +1,11 @@
+#!/bin/bash
+# Jarvis launcher — runs from anywhere.
+set -e
+JARVIS_DIR="/Users/skr/KILO/jarvis"
+cd "$JARVIS_DIR"
+if [ ! -d ".venv" ]; then
+    echo "Setting up venv on first run..."
+    python3 -m venv .venv
+    .venv/bin/pip install -q -r requirements.txt
+fi
+exec .venv/bin/python main.py "$@"

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JARVIS</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg">
+    <div class="grid"></div>
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="glow glow-3"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="logo">J·A·R·V·I·S</span>
+      <span class="subtitle" id="model">—</span>
+    </div>
+    <div class="actions">
+      <button class="chip" id="btn-voice" title="Toggle voice (⌘V)">
+        <span class="led"></span><span class="label">VOICE</span>
+      </button>
+      <button class="chip" id="btn-reset" title="Reset conversation">RESET</button>
+      <button class="chip" id="btn-stop" title="Interrupt speech (Esc)">STOP</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="orb-panel">
+      <div class="orb-wrap" id="orb">
+        <div class="ring ring-outer"></div>
+        <div class="ring ring-mid"></div>
+        <div class="ring ring-inner"></div>
+        <div class="core"></div>
+        <div class="halo"></div>
+      </div>
+      <div class="state-line" id="state-line">STANDBY</div>
+      <div class="meter" id="meter"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="hint">Speak any time, or type below.</div>
+    </section>
+
+    <section class="chat-panel">
+      <div class="chat" id="chat">
+        <div class="msg msg-system"><div class="bubble">Online. Ask me anything.</div></div>
+      </div>
+      <form class="composer" id="composer" autocomplete="off">
+        <input id="prompt" placeholder="Type a command, or say 'jarvis…'" autofocus />
+        <button type="submit" id="send">→</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
