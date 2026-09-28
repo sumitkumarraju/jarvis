@@ -3,7 +3,10 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage, AIMessageChunk
 from langchain_core.tools import BaseTool
 
-from config import OLLAMA_MODEL, OLLAMA_HOST
+from config import (
+    JARVIS_PROVIDER, OLLAMA_MODEL, OLLAMA_HOST,
+    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
+)
 from tools import ALL_TOOLS
 
 SYSTEM_PROMPT = """You are Jarvis, a personal assistant running on the user's macOS laptop.
@@ -14,11 +17,14 @@ You have tools to:
 - run shell commands (the user is asked to confirm)
 - read, write, list, and find files
 - control keyboard, mouse, screenshots, volume, clipboard
+- control Spotify playback with the spotify_playback tool
 - remember and recall facts across sessions
 
 Behavior:
 - Be concise. Replies are spoken aloud — short, natural, one or two sentences.
 - When the user asks for an action, do it via tools. Don't just describe it.
+- For short desktop commands, call the native tool immediately; do not explain a plan first.
+- For Spotify play, pause, next, or previous requests, use spotify_playback instead of a shell command.
 - Chain tool calls when needed. After tools return, give a brief spoken summary.
 - If a request is ambiguous or destructive, ask one quick clarifying question.
 - Never invent file paths or URLs. Use list_dir, find_files, or web_search to discover them.
@@ -28,9 +34,23 @@ Behavior:
 class Jarvis:
     def __init__(self, tools: list[BaseTool] | None = None):
         self.tools = tools or ALL_TOOLS
-        self.llm = ChatOllama(
-            model=OLLAMA_MODEL, base_url=OLLAMA_HOST, temperature=0.2, reasoning=False
-        ).bind_tools(self.tools)
+        if JARVIS_PROVIDER in {"openai", "omniroute", "claude"}:
+            from langchain_openai import ChatOpenAI
+
+            if not OPENAI_API_KEY:
+                raise RuntimeError(
+                    "OPENAI_API_KEY is required when JARVIS_PROVIDER is openai/omniroute/claude"
+                )
+            self.llm = ChatOpenAI(
+                model=OPENAI_MODEL,
+                base_url=OPENAI_BASE_URL,
+                api_key=OPENAI_API_KEY,
+                temperature=0.2,
+            ).bind_tools(self.tools)
+        else:
+            self.llm = ChatOllama(
+                model=OLLAMA_MODEL, base_url=OLLAMA_HOST, temperature=0.2, reasoning=False
+            ).bind_tools(self.tools)
         self.tools_by_name = {t.name: t for t in self.tools}
         self.history = [SystemMessage(content=SYSTEM_PROMPT)]
 

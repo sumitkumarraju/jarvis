@@ -16,6 +16,7 @@ from faster_whisper import WhisperModel
 
 from config import (
     WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE,
+    WHISPER_LANGUAGE,
     SAMPLE_RATE, SILENCE_TIMEOUT, SPEECH_THRESHOLD,
 )
 from voice.speak import is_speaking
@@ -123,7 +124,9 @@ class ContinuousListener:
 
     def _transcribe(self, audio: np.ndarray) -> str:
         try:
-            segments, _ = get_model().transcribe(audio, language="en", vad_filter=True, beam_size=1)
+            segments, _ = get_model().transcribe(
+                audio, language=WHISPER_LANGUAGE, vad_filter=True, beam_size=1
+            )
             return " ".join(s.text.strip() for s in segments).strip()
         except Exception:
             return ""

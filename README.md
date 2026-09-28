@@ -10,7 +10,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Sonoma+-000000?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-**Jarvis is a fully local, voice-enabled AI agent that runs entirely on your Mac — no cloud, no API keys, no data leaving your machine.**
+**Jarvis is a voice-enabled macOS agent with a local Ollama brain by default, plus optional support for Claude through an OpenAI-compatible endpoint such as a local OmniRoute gateway.**
 
 [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Installation](#-installation) · [Usage](#-usage) · [Configuration](#-configuration) · [Tools Reference](#-tools-reference)
 
@@ -25,8 +25,24 @@ Jarvis is a production-grade, offline AI assistant that combines a locally-runni
 It ships with a native **desktop GUI** (via pywebview) and a lightweight **text REPL**, making it suitable for both daily use and developer experimentation.
 
 ```
-You (voice/text) → Whisper STT → LangChain Agent (Ollama LLM) → Tool Calls → pyttsx3 TTS → You
+You (voice/text) → local Whisper STT → Ollama or OpenAI-compatible LLM → Tool Calls → macOS TTS → You
 ```
+
+The GUI starts voice listening automatically. Speak a command, stop speaking, and Jarvis submits it after two seconds of silence; no recording toggle is required. Adjust the pause with `JARVIS_SILENCE_TIMEOUT=3.0` or `JARVIS_SILENCE_TIMEOUT=1.0`.
+
+### Claude through OmniRoute
+
+Jarvis can use your local OmniRoute gateway as its brain while keeping microphone capture, TTS, and desktop tools local:
+
+```bash
+export JARVIS_PROVIDER=omniroute
+export OPENAI_BASE_URL=http://127.0.0.1:20128/v1
+export OPENAI_API_KEY='your-local-omniroute-key'
+export OPENAI_MODEL='agy/claude-opus-4-6-thinking'
+python main.py
+```
+
+Use the model name exposed by your gateway. Keep the key in the environment and never commit it. The gateway may forward requests to an upstream provider, so this mode is not fully offline. Remove those variables to return to Ollama.
 
 ---
 
@@ -35,10 +51,10 @@ You (voice/text) → Whisper STT → LangChain Agent (Ollama LLM) → Tool Calls
 | Category | Capability |
 |---|---|
 | 🧠 **AI Brain** | Local LLM via Ollama — runs `qwen3.5`, `llama3.1`, `mistral-nemo`, and more |
-| 🎤 **Voice Input** | Continuous wake-word listening (`"Jarvis, ..."`) or push-to-talk |
-| 🔊 **Voice Output** | Natural TTS via pyttsx3 (macOS Samantha voice by default) |
+| 🎤 **Voice Input** | Always-on GUI listening with local Whisper and automatic submit after a pause |
+| 🔊 **Voice Output** | Offline macOS TTS through the built-in `say` command (Samantha by default) |
 | 🌐 **Web** | DuckDuckGo search + full-page scraping |
-| 🖥️ **App Control** | Open, quit, switch, and list macOS applications via AppleScript |
+| 🖥️ **App Control** | Open, quit, switch, and list macOS applications via AppleScript, including Spotify playback |
 | 🔧 **Shell** | Run terminal commands (with confirmation gate before execution) |
 | 📁 **Files** | List, read, write, and find files across the filesystem |
 | ⌨️ **Automation** | Type text, press key combos, move/click mouse, take screenshots |
@@ -61,7 +77,7 @@ jarvis/
 ├── tools/
 │   ├── __init__.py       ← ALL_TOOLS registry — single source of truth
 │   ├── web.py            ← web_search, fetch_page
-│   ├── apps.py           ← open_app, quit_app, list_running_apps, switch_to_app
+│   ├── apps.py           ← app control plus Spotify playback
 │   ├── shell.py          ← run_shell (with confirmation guard)
 │   ├── files.py          ← list_dir, read_file, write_file, find_files
 │   ├── keyboard.py       ← type_text, press_keys, mouse_click, mouse_move, get_screen_size
@@ -71,7 +87,7 @@ jarvis/
 │
 ├── voice/
 │   ├── listen.py         ← ContinuousListener — VAD + faster-whisper transcription
-│   └── speak.py          ← TTS output via pyttsx3
+│   └── speak.py          ← TTS output via macOS `say`
 │
 └── webui/
     ├── index.html        ← Chat UI markup
@@ -86,7 +102,7 @@ jarvis/
 User Input (text or transcribed voice)
         │
         ▼
- LangChain ChatOllama ──→ Bound with ALL_TOOLS (via bind_tools)
+ Ollama or ChatOpenAI ──→ Bound with ALL_TOOLS (via bind_tools)
         │
   ┌─────┴──────────────────────────────────┐
   │  Step N                                │
@@ -118,7 +134,8 @@ User Input (text or transcribed voice)
 | **[langchain-core](https://python.langchain.com/docs/concepts/)** | `>=0.3.0` | Message types (`HumanMessage`, `AIMessage`, `ToolMessage`), `@tool` decorator |
 | **[langchain-ollama](https://python.langchain.com/docs/integrations/llms/ollama/)** | `>=0.2.0` | `ChatOllama` — connects LangChain to a local Ollama instance |
 | **[langchain-community](https://python.langchain.com/docs/integrations/providers/)** | `>=0.3.0` | Community integrations (DuckDuckGo wrapper, utilities) |
-| **[Ollama](https://ollama.ai)** | latest | Local LLM runtime — serves models like `qwen3.5`, `llama3.1` via REST |
+| **langchain-openai** | `>=0.3.0` | Optional OpenAI-compatible client for OmniRoute and other gateways |
+| **[Ollama](https://ollama.ai)** | latest | Default local LLM runtime — serves models like `qwen3.5`, `llama3.1` via REST |
 
 > **Why LangChain?** LangChain's `bind_tools()` API converts Python functions decorated with `@tool` into the JSON schema that Ollama's tool-calling API expects. It also manages the `AIMessage → ToolMessage → AIMessage` conversation cycle automatically, letting the agent chain multiple tool calls without custom parsing.
 
@@ -133,15 +150,15 @@ User Input (text or transcribed voice)
 **How STT works:**
 1. `sounddevice` streams 1024-sample blocks at 16 kHz from the mic.
 2. A simple RMS energy VAD (threshold configurable via `JARVIS_VAD_THRESHOLD`) detects speech onset.
-3. Audio is buffered until `SILENCE_TIMEOUT` seconds of quiet (default 1.0s) is detected.
-4. The buffered `float32` array is passed to `faster-whisper` (model: `tiny.en` / `base.en`) for transcription.
+3. Audio is buffered until `JARVIS_SILENCE_TIMEOUT` seconds of quiet (default 2.0s) is detected.
+4. The buffered `float32` array is passed to `faster-whisper` (default model: `base`) for transcription.
 5. While TTS is speaking, the listener suppresses all audio to prevent self-echo.
 
 ### Text-to-Speech (TTS)
 
 | Library | Version | Role |
 |---|---|---|
-| **[pyttsx3](https://pyttsx3.readthedocs.io/)** | `>=2.90` | Offline TTS using macOS NSSpeechSynthesizer (no network required) |
+| **macOS `say`** | built in | Offline TTS using the selected macOS system voice |
 
 Default voice: **Samantha** (macOS system voice). Speech rate defaults to **210 WPM** — both configurable.
 
@@ -194,7 +211,7 @@ The `Bridge` class in `webui/bridge.py` exposes Python methods to JavaScript via
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/jarvis.git
+git clone https://github.com/sumitkumarraju/jarvis.git
 cd jarvis
 ```
 
@@ -229,7 +246,7 @@ ollama pull qwen2.5
 ollama pull mistral-nemo
 ```
 
-> **Note:** First voice run will download the Whisper model (~140 MB for `base.en`, ~39 MB for `tiny.en`).
+> **Note:** First voice run downloads the Whisper checkpoint. The default `base` model is multilingual; use `WHISPER_MODEL=tiny.en` for the smallest English-only setup.
 
 ---
 
@@ -272,12 +289,17 @@ All configuration is done via **environment variables**. Set them in your shell 
 
 | Variable | Default | Description |
 |---|---|---|
+| `JARVIS_PROVIDER` | `ollama` | `ollama`, `openai`, `omniroute`, or `claude` |
 | `JARVIS_MODEL` | `qwen3.5:latest` | Ollama model name to use |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `WHISPER_MODEL` | `tiny.en` | Whisper model size: `tiny.en`, `base.en`, `small.en` |
+| `OPENAI_BASE_URL` | `http://127.0.0.1:20128/v1` | OpenAI-compatible endpoint |
+| `OPENAI_API_KEY` | empty | Key for the selected OpenAI-compatible endpoint |
+| `OPENAI_MODEL` | `agy/claude-opus-4-6-thinking` | Model sent to the OpenAI-compatible endpoint |
+| `WHISPER_MODEL` | `base` | Whisper model size: `tiny.en`, `base`, `small` |
+| `WHISPER_LANGUAGE` | auto | Optional language code; empty enables automatic detection |
 | `WHISPER_DEVICE` | `cpu` | Whisper inference device: `cpu` or `cuda` |
 | `WHISPER_COMPUTE` | `int8` | Compute type: `int8`, `float16`, `float32` |
-| `JARVIS_WAKE` | `jarvis` | Wake word for continuous listening mode |
+| `JARVIS_SILENCE_TIMEOUT` | `2.0` | Seconds of silence before the voice command is submitted |
 | `JARVIS_VAD_THRESHOLD` | `0.012` | RMS energy threshold for voice activity detection |
 | `JARVIS_VOICE` | `Samantha` | macOS TTS voice name |
 | `JARVIS_RATE` | `210` | TTS speech rate (words per minute) |
@@ -288,7 +310,8 @@ All configuration is done via **environment variables**. Set them in your shell 
 
 ```bash
 export JARVIS_MODEL=llama3.1
-export WHISPER_MODEL=base.en
+export WHISPER_MODEL=base
+export JARVIS_SILENCE_TIMEOUT=2.0
 export JARVIS_VOICE=Alex
 export JARVIS_CONFIRM_SHELL=0  # ⚠️ Only if you fully trust the model
 ```
@@ -312,6 +335,7 @@ The agent has access to **30 tools** across 8 categories. Each tool is a Python 
 | `quit_app(name)` | Quit a running application |
 | `list_running_apps()` | List all currently running applications |
 | `switch_to_app(name)` | Bring an application to the foreground |
+| `spotify_playback(action)` | Open Spotify and play, pause, skip, or go to the previous track |
 
 ### 🔧 Shell
 | Tool | Description |
@@ -381,9 +405,10 @@ Jarvis requires a model with **native tool-calling support** (function calling).
 
 | Model | Tool Calling | Quality | Notes |
 |---|---|---|---|
-| `qwen3.5` ⭐ | ✅ | Excellent | Default — fast, accurate tool use |
+| `qwen3.5` ⭐ | ✅ | Excellent | Default local model — fast, accurate tool use |
 | `qwen2.5` | ✅ | Excellent | Great alternative |
 | `llama3.1` | ✅ | Very Good | Solid all-rounder |
+| Claude through OmniRoute | ✅ | Excellent | Optional OpenAI-compatible provider; requires a running gateway and valid key |
 | `mistral-nemo` | ✅ | Good | Lightweight option |
 | Small distilled models | ❌ | Poor | Often fail to call tools correctly |
 
@@ -395,7 +420,7 @@ Jarvis requires a model with **native tool-calling support** (function calling).
 
 - [ ] Multi-modal support (image input via LLaVA)
 - [ ] Calendar & reminders integration (EventKit)
-- [ ] Spotify / music control via AppleScript
+- [x] Spotify / music control via AppleScript
 - [ ] Plugin system for custom tools
 - [ ] Conversation export & history search
 - [ ] Hotkey-activated push-to-talk from any app

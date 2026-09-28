@@ -1,5 +1,5 @@
 from .web import web_search, fetch_page
-from .apps import open_app, quit_app, list_running_apps, switch_to_app
+from .apps import open_app, quit_app, list_running_apps, switch_to_app, spotify_playback
 from .shell import run_shell
 from .files import list_dir, read_file, write_file, find_files
 from .keyboard import type_text, press_keys, mouse_click, mouse_move, get_screen_size
@@ -12,7 +12,7 @@ from .memory import remember, recall, list_memory, forget
 
 ALL_TOOLS = [
     web_search, fetch_page,
-    open_app, quit_app, list_running_apps, switch_to_app,
+    open_app, quit_app, list_running_apps, switch_to_app, spotify_playback,
     run_shell,
     list_dir, read_file, write_file, find_files,
     type_text, press_keys, mouse_click, mouse_move, get_screen_size,

@@ -39,8 +39,14 @@ class Bridge:
 
     # ===== exposed to JS =====
     def ready(self) -> dict:
-        from config import OLLAMA_MODEL
-        return {"model": OLLAMA_MODEL, "voice": self.voice_on}
+        from config import JARVIS_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL, SILENCE_TIMEOUT
+        model = OPENAI_MODEL if JARVIS_PROVIDER in {"openai", "omniroute", "claude"} else OLLAMA_MODEL
+        return {
+            "model": model,
+            "provider": JARVIS_PROVIDER,
+            "voice": self.voice_on,
+            "silence_timeout": SILENCE_TIMEOUT,
+        }
 
     def send_message(self, text: str, voiced: bool = False) -> None:
         text = (text or "").strip()

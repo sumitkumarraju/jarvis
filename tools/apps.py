@@ -1,4 +1,5 @@
 import subprocess
+from typing import Literal
 from langchain_core.tools import tool
 
 
@@ -34,3 +35,16 @@ def list_running_apps() -> str:
     return _osascript(
         'tell application "System Events" to get name of (every process whose background only is false)'
     )
+
+
+@tool
+def spotify_playback(action: Literal["play", "pause", "next", "previous"]) -> str:
+    """Control Spotify playback immediately: play, pause, next, or previous."""
+    commands = {
+        "play": "play",
+        "pause": "pause",
+        "next": "next track",
+        "previous": "previous track",
+    }
+    subprocess.run(["open", "-a", "Spotify"], check=False, capture_output=True, text=True)
+    return _osascript(f'tell application "Spotify" to {commands[action]}')
