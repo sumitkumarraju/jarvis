@@ -1,59 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>JARVIS</title>
-<link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Jarvis | Your personal assistant</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg">
-    <div class="grid"></div>
-    <div class="glow glow-1"></div>
-    <div class="glow glow-2"></div>
-    <div class="glow glow-3"></div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Assistant controls">
+      <a class="brand" href="#workspace" aria-label="Jarvis assistant"><span class="brand-mark" aria-hidden="true">J</span><span>jarvis<span class="brand-caption">Your Mac. A little smarter.</span></span></a>
+      <button class="new-chat" id="btn-reset" aria-label="New conversation" disabled><span aria-hidden="true">＋</span> New conversation <kbd>⌘ N</kbd></button>
+
+      <section class="model-settings" aria-labelledby="settings-heading">
+        <div class="section-heading"><h2 id="settings-heading">Model & connection</h2><button class="text-button" id="btn-refresh" title="Refresh available models" disabled>Refresh</button></div>
+        <p class="section-description">Choose the brain behind your assistant.</p>
+        <form id="model-form">
+          <div class="field"><label for="provider-select">Provider</label><select id="provider-select" disabled><option value="ollama">Ollama</option></select></div>
+          <div class="field"><label for="model-select">Model</label><select id="model-select" disabled><option value="">Connect to discover models</option></select></div>
+          <div class="field" id="custom-model-field" hidden><label for="custom-model">Custom model name</label><input id="custom-model" placeholder="Exact model ID" maxlength="200" autocomplete="off" /></div>
+          <p id="endpoint" class="endpoint">Your configured endpoint appears here.</p>
+          <p id="model-note" class="field-note">Models with tool calling work best.</p>
+          <p class="inline-status" id="model-status" role="status" aria-live="polite"></p>
+          <button class="apply-button" id="btn-apply" type="submit" disabled>Apply model <span aria-hidden="true">↗</span></button>
+        </form>
+        <p class="privacy-note" id="privacy-note">Local models keep your conversation on this Mac.</p>
+      </section>
+
+      <section class="voice-panel" aria-labelledby="voice-heading">
+        <div class="section-heading"><h2 id="voice-heading">Voice mode</h2><span class="small-badge" id="voice-badge">Paused</span></div>
+        <div class="voice-display" id="orb" data-state="idle">
+          <div class="meter" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <span id="state-line" role="status">Microphone paused</span>
+        </div>
+        <button id="btn-voice" class="voice-button" aria-pressed="false" disabled>Start listening</button>
+        <div class="field wake-field"><label for="wake-mode">Wake-up method</label><select id="wake-mode" disabled><option value="phrase_or_clap">Wake phrase or double clap</option><option value="phrase">Wake phrase only</option><option value="clap">Double clap only</option><option value="always">Always listen / manual toggle</option></select></div>
+        <p class="field-note" id="voice-hint">Say “Hey Jarvis” or “Wake up Jarvis”, or clap twice.</p>
+      </section>
+      <div class="sidebar-footer"><span class="connection-dot" id="connection-dot" aria-hidden="true"></span><span id="connection-label">Connecting to desktop…</span><span class="footer-platform">macOS</span></div>
+    </aside>
+
+    <main class="workspace" id="workspace">
+      <header class="topbar">
+        <div><h1>Assistant</h1><div class="active-model"><span id="provider-label">Desktop workspace</span><span class="separator" aria-hidden="true">/</span><span id="model">No model connected</span></div></div>
+        <div class="topbar-actions"><button id="btn-stop" class="quiet-button" title="Stops spoken audio, not an in-progress action" disabled>Stop speech <kbd>esc</kbd></button><button id="btn-theme" class="theme-button" aria-label="Switch color theme" title="Switch color theme"><span aria-hidden="true">◐</span></button></div>
+      </header>
+      <div class="preview-banner" id="preview-banner" hidden><strong>Interface preview</strong><span>Launch Jarvis.command to connect chat, models, and your microphone.</span></div>
+      <section class="speech-lyrics" id="speech-lyrics" aria-live="polite" aria-label="Recognized speech" hidden>
+        <div class="lyrics-header"><span class="lyrics-pulse" aria-hidden="true"></span><span id="lyrics-label">Listening</span><span class="lyrics-state" id="lyrics-state">Draft</span></div>
+        <p class="lyrics-text" id="lyrics-text"></p>
+        <p class="lyrics-note" id="lyrics-note">Your speech appears here before Jarvis decides what to do.</p>
+      </section>
+      <div class="chat-scroll" id="chat-scroll">
+        <section class="welcome" id="welcome" aria-labelledby="welcome-heading">
+          <div class="welcome-mark" aria-hidden="true">J<span class="mark-dot"></span></div>
+          <p class="welcome-label">A hand with your everyday.</p>
+          <h2 id="welcome-heading">What can I do for you?</h2>
+          <p class="welcome-description">Ask a question, find something, or get things done on your Mac.</p>
+          <div class="suggestions">
+            <button class="suggestion" data-prompt="Open Safari" disabled><span class="suggestion-symbol" aria-hidden="true">⌘</span><span><strong>Open an app</strong><small>Bring your workspace to life</small></span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
+            <button class="suggestion" data-prompt="List the files in my Downloads folder" disabled><span class="suggestion-symbol" aria-hidden="true">⌕</span><span><strong>Find a file</strong><small>A little less searching</small></span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
+            <button class="suggestion" data-prompt="Play Spotify" disabled><span class="suggestion-symbol" aria-hidden="true">♫</span><span><strong>Control Spotify</strong><small>Set the soundtrack</small></span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
+            <button class="suggestion" data-prompt="What can you help me with?" disabled><span class="suggestion-symbol" aria-hidden="true">?</span><span><strong>Explore Jarvis</strong><small>See what your assistant can do</small></span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
+          </div>
+          <p class="welcome-footnote">You stay in control. Shell commands still require confirmation.</p>
+        </section>
+        <section class="chat" id="chat" aria-label="Conversation" aria-live="polite" aria-relevant="additions" aria-busy="false"></section>
+      </div>
+      <div class="composer-area">
+        <p class="message-status" id="message-status" role="status" aria-live="polite"></p>
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="sr-only" for="prompt">Message Jarvis</label>
+          <textarea id="prompt" rows="1" placeholder="Ask Jarvis anything…" disabled></textarea>
+          <button type="submit" id="send" aria-label="Send message" disabled><span aria-hidden="true">↑</span></button>
+        </form>
+        <div class="composer-meta"><span id="composer-hint">Type a message to get started</span><span><kbd>Enter</kbd> to send <span class="meta-separator">/</span> <kbd>Shift Enter</kbd> for a new line</span></div>
+      </div>
+    </main>
   </div>
-
-  <header class="topbar">
-    <div class="brand">
-      <span class="dot"></span>
-      <span class="logo">J·A·R·V·I·S</span>
-      <span class="subtitle" id="model">—</span>
-    </div>
-    <div class="actions">
-      <button class="chip" id="btn-voice" title="Toggle voice (⌘V)">
-        <span class="led"></span><span class="label">VOICE</span>
-      </button>
-      <button class="chip" id="btn-reset" title="Reset conversation">RESET</button>
-      <button class="chip" id="btn-stop" title="Interrupt speech (Esc)">STOP</button>
-    </div>
-  </header>
-
-  <main class="stage">
-    <section class="orb-panel">
-      <div class="orb-wrap" id="orb">
-        <div class="ring ring-outer"></div>
-        <div class="ring ring-mid"></div>
-        <div class="ring ring-inner"></div>
-        <div class="core"></div>
-        <div class="halo"></div>
-      </div>
-      <div class="state-line" id="state-line">STANDBY</div>
-      <div class="meter" id="meter"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <div class="hint">Speak any time, or type below.</div>
-    </section>
-
-    <section class="chat-panel">
-      <div class="chat" id="chat">
-        <div class="msg msg-system"><div class="bubble">Online. Ask me anything.</div></div>
-      </div>
-      <form class="composer" id="composer" autocomplete="off">
-        <input id="prompt" placeholder="Type a command, or say 'jarvis…'" autofocus />
-        <button type="submit" id="send">→</button>
-      </form>
-    </section>
-  </main>
-
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 from typing import Iterator, Callable
-from langchain_ollama import ChatOllama
+from uuid import uuid4
+
+from agent.reactive import ReactiveRouter
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage, AIMessageChunk
 from langchain_core.tools import BaseTool
 
 from config import (
     JARVIS_PROVIDER, OLLAMA_MODEL, OLLAMA_HOST,
-    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
+    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL, validate_selection,
 )
-from tools import ALL_TOOLS
 
 SYSTEM_PROMPT = """You are Jarvis, a personal assistant running on the user's macOS laptop.
 
@@ -32,26 +35,40 @@ Behavior:
 
 
 class Jarvis:
-    def __init__(self, tools: list[BaseTool] | None = None):
-        self.tools = tools or ALL_TOOLS
-        if JARVIS_PROVIDER in {"openai", "omniroute", "claude"}:
+    def __init__(
+        self, tools: list[BaseTool] | None = None, *,
+        provider: str | None = None, model: str | None = None,
+    ):
+        self.provider = JARVIS_PROVIDER if provider is None else provider
+        self.model = model if model is not None else (
+            OLLAMA_MODEL if self.provider == "ollama" else OPENAI_MODEL
+        )
+        self.provider, self.model = validate_selection(self.provider, self.model)
+        if self.provider != "ollama" and not OPENAI_API_KEY:
+            raise RuntimeError(
+                "OPENAI_API_KEY is required when JARVIS_PROVIDER is openai/omniroute/claude"
+            )
+        if tools is None:
+            from tools import ALL_TOOLS
+            tools = ALL_TOOLS
+        self.tools = tools
+        if self.provider in {"openai", "omniroute", "claude"}:
             from langchain_openai import ChatOpenAI
 
-            if not OPENAI_API_KEY:
-                raise RuntimeError(
-                    "OPENAI_API_KEY is required when JARVIS_PROVIDER is openai/omniroute/claude"
-                )
             self.llm = ChatOpenAI(
-                model=OPENAI_MODEL,
+                model=self.model,
                 base_url=OPENAI_BASE_URL,
                 api_key=OPENAI_API_KEY,
                 temperature=0.2,
             ).bind_tools(self.tools)
         else:
+            from langchain_ollama import ChatOllama
+
             self.llm = ChatOllama(
-                model=OLLAMA_MODEL, base_url=OLLAMA_HOST, temperature=0.2, reasoning=False
+                model=self.model, base_url=OLLAMA_HOST, temperature=0.2, reasoning=False
             ).bind_tools(self.tools)
         self.tools_by_name = {t.name: t for t in self.tools}
+        self.reactive = ReactiveRouter()
         self.history = [SystemMessage(content=SYSTEM_PROMPT)]
 
     def reset(self) -> None:
@@ -59,6 +76,9 @@ class Jarvis:
 
     def chat(self, user_text: str, max_steps: int = 6) -> str:
         self.history.append(HumanMessage(content=user_text))
+        reply = self._react(user_text)
+        if reply is not None:
+            return reply
         for _ in range(max_steps):
             ai: AIMessage = self.llm.invoke(self.history)
             self.history.append(ai)
@@ -76,6 +96,10 @@ class Jarvis:
     ) -> Iterator[str]:
         """Yield text chunks as the model produces them. Runs tools transparently."""
         self.history.append(HumanMessage(content=user_text))
+        reply = self._react(user_text, on_tool)
+        if reply is not None:
+            yield reply
+            return
 
         for _ in range(max_steps):
             agg: AIMessageChunk | None = None
@@ -107,6 +131,27 @@ class Jarvis:
                     try: on_tool(call["name"], call.get("args", {}))
                     except Exception: pass
             self._run_tools(ai)
+
+    def _react(self, text: str, on_tool=None) -> str | None:
+        # Do not load a decision model unless a relevant native tool is available.
+        if not {'spotify_playback', 'open_app'}.intersection(self.tools_by_name):
+            return None
+        action = self.reactive.decide(text)
+        if action is None or action['tool'] not in self.tools_by_name:
+            return None
+        name, args = action['tool'], action['args']
+        call_id = 'laya-' + uuid4().hex
+        self.history.append(AIMessage(content='', tool_calls=[{'name': name, 'args': args, 'id': call_id}]))
+        if on_tool:
+            on_tool(name, args)
+        try:
+            result = str(self.tools_by_name[name].invoke(args))
+        except Exception as error:
+            result = f'Error: {error}'
+        self.history.append(ToolMessage(content=result, tool_call_id=call_id))
+        reply = result if result.lower().startswith(('error:', 'tool error:')) else action['reply']
+        self.history.append(AIMessage(content=reply))
+        return reply
 
     def _run_tools(self, ai: AIMessage) -> None:
         for call in ai.tool_calls:

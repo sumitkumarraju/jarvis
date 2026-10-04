@@ -2,6 +2,7 @@ langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-ollama>=0.2.0
 langchain-openai>=0.3.0
+laya==0.3.20
 langchain-community>=0.3.0
 duckduckgo-search>=6.3.0
 beautifulsoup4>=4.12.0

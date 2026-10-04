@@ -14,7 +14,9 @@ def _osascript(script: str) -> str:
 def open_app(app_name: str) -> str:
     """Open a macOS application by name (e.g. 'Safari', 'Notes', 'Visual Studio Code')."""
     r = subprocess.run(["open", "-a", app_name], capture_output=True, text=True)
-    return r.stderr.strip() or f"Opened {app_name}"
+    if r.returncode != 0:
+        return f"Error: {r.stderr.strip() or f'Could not open {app_name}'}"
+    return f"Opened {app_name}"
 
 
 @tool

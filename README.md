@@ -25,10 +25,10 @@ Jarvis is a production-grade, offline AI assistant that combines a locally-runni
 It ships with a native **desktop GUI** (via pywebview) and a lightweight **text REPL**, making it suitable for both daily use and developer experimentation.
 
 ```
-You (voice/text) → local Whisper STT → Ollama or OpenAI-compatible LLM → Tool Calls → macOS TTS → You
+You (voice/text) → local Whisper STT → Laya reactive decision / selected processing LLM → Tool Calls → macOS TTS → You
 ```
 
-The GUI starts voice listening automatically. Speak a command, stop speaking, and Jarvis submits it after two seconds of silence; no recording toggle is required. Adjust the pause with `JARVIS_SILENCE_TIMEOUT=3.0` or `JARVIS_SILENCE_TIMEOUT=1.0`.
+Double-click **`Jarvis.command`** to open the desktop interface with voice enabled automatically. Wait for **Waiting for a wake phrase or clap** after speech recognition warms up, then say **Hey Jarvis** or **Wake up Jarvis**, or clap twice. Press **Pause listening** to stop the microphone, or launch with `./Jarvis.command --no-voice` to keep it paused. Speak a command, stop speaking, and Jarvis submits it after two seconds of silence. Adjust the pause with `JARVIS_SILENCE_TIMEOUT=3.0` or `JARVIS_SILENCE_TIMEOUT=1.0`.
 
 ### Claude through OmniRoute
 
@@ -60,7 +60,7 @@ Use the model name exposed by your gateway. Keep the key in the environment and 
 | ⌨️ **Automation** | Type text, press key combos, move/click mouse, take screenshots |
 | 🔔 **System** | Volume control, clipboard R/W, battery status, lock screen, notifications |
 | 💾 **Memory** | Persistent key-value memory — remember facts across sessions |
-| 🖼️ **Desktop GUI** | Electron-style webview window with a dark-themed chat interface |
+| 🖼️ **Desktop GUI** | Native webview with streaming chat, light/dark themes, voice controls, and a runtime model picker |
 
 ---
 
@@ -238,7 +238,7 @@ brew install ollama
 ollama serve
 
 # Pull a model (qwen3.5 is the default)
-ollama pull qwen3:latest
+ollama pull qwen3.5:latest
 
 # Or try other compatible models:
 ollama pull llama3.1
@@ -254,10 +254,54 @@ ollama pull mistral-nemo
 
 ### Desktop GUI (Recommended)
 
+**Easiest:** double-click `Jarvis.command` in Finder. The launcher runs from this project folder and creates a local `.venv` with the required dependencies on first launch. Python 3.11 is preferred when available; set `JARVIS_PYTHON` to override the setup interpreter. No global Python packages are installed. First-time setup needs internet access, and microphone permissions may be requested when you enable voice.
+
+Or launch from Terminal:
+
 ```bash
-python main.py                  # GUI with voice enabled by default
-python main.py --no-voice       # GUI with voice disabled
+cd "/Users/skr/Documents/New project/jarvis"
+./Jarvis.command                # GUI with voice enabled automatically
+./Jarvis.command --no-voice     # GUI with microphone paused
+./jarvis --no-voice              # Same GUI, portable terminal launcher
+python main.py                  # GUI with voice enabled (activate .venv first)
+python main.py --no-voice        # GUI with voice disabled
 ```
+
+**Switch models without restarting:**
+
+1. Under **Model & connection**, select a provider.
+2. Choose a discovered model, or select **Enter a custom model…** and type the exact model ID.
+3. Click **Apply model**. The active model appears above the chat, and the conversation is retained.
+
+**Refresh** queries your configured Ollama or OpenAI-compatible endpoint; it does not start servers or download models. If discovery fails, the interface shows a connection error and still allows a custom model ID. Run `ollama serve` and `ollama pull <model>` separately when needed. Model application configures the client; availability and tool support are ultimately verified when you send a request.
+
+Gateway providers use the existing `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables. The interface never requests, displays, or saves your key. Models should support tool calling to perform desktop actions. Changes and conversation reset are disabled while Jarvis is responding.
+
+**Voice and chat:**
+
+- Voice starts automatically. **Start listening / Pause listening** controls the microphone; the meter reflects actual audio input.
+- The voice panel shows microphone warm-up, **Waiting for a wake phrase or clap**, **Awake. Say your command**, **Hearing you**, and transcription so preparation is not mistaken for recognition.
+- Under **Wake-up method**, choose **Always listen / manual toggle** (default), **Wake phrase or double clap**, **Wake phrase only**, or **Double clap only**.
+- Say **“Hey Jarvis, open Safari”** in one utterance, or say **“Wake up Jarvis”**, pause, then give a command. **“Jarvis”** alone also works. A wake signal arms one command for 12 seconds; after the command or timeout, Jarvis waits for another wake signal.
+- Clap **twice**, about 0.12–0.8 seconds apart, then say your command. Clap detection uses loud audio impulses, not a dedicated sound classifier, so other loud paired sounds can also wake it. Tune `JARVIS_CLAP_THRESHOLD` if necessary.
+- To use only the manual toggle, select **Always listen / manual toggle**, then use **Start listening / Pause listening**. A paused microphone cannot hear a wake phrase or clap. In wake modes the microphone stays on to detect activation; this is not an OS-level wake-from-sleep feature.
+- The first voice session may download the configured Whisper checkpoint.
+- Type a message and press **Enter** to send; **Shift+Enter** adds a line break.
+- The suggestion buttons fill the composer; review the command before sending it.
+- Shell actions ask for approval in a **native desktop dialog**, not a hidden terminal prompt. Denial or a closed dialog never executes the command; the text REPL keeps its original terminal prompt.
+- **Stop speech** (or **Esc**) stops spoken audio only, not an in-progress model request or tool action.
+- **New conversation** clears chat history. **⌘N** is the shortcut; **⌘Shift+V** toggles voice.
+- The theme button switches light/dark appearance; the initial theme follows your system.
+
+Opening `webui/index.html` in a browser is a **visual preview only**. Real chat, model discovery, and voice need the native desktop app.
+
+### Laya reactive + processing architecture
+
+Whisper still handles speech recognition. **Laya 0.3.20** adds a local System 1 decision layer for explicit short commands: Spotify play/pause/next/previous, and opening Safari, Notes, Spotify, or Calculator. A confident Laya decision must match a fixed allowlist before a native tool runs. Negated, compound, uncertain, and parameterized requests go to the selected Ollama or OpenAI-compatible model (System 2). Reactive actions preserve chat history and never bypass shell confirmation.
+
+The first reactive command loads a Laya checkpoint and may be slower; subsequent decisions reuse the loaded model. The composer status shows loading/routing/fallback. If Laya cannot load or is uncertain, normal model processing remains available. Laya does not generate open-ended replies or replace Whisper. Dependency/checkpoint setup may need internet access on a new installation; this Mac uses the existing local Laya checkout and cached checkpoint.
+
+If the microphone cannot start, allow the launching terminal/Python app in **System Settings > Privacy & Security > Microphone**. In the default wake mode say **“Hey Jarvis, open Safari”** and pause for two seconds; in **Always listen / manual toggle**, no wake phrase is required. If the meter moves but **Hearing you** never appears, try `JARVIS_VAD_THRESHOLD=0.006 ./Jarvis.command`; if room noise prevents submission, increase the threshold instead.
 
 ### Text REPL
 
@@ -285,7 +329,7 @@ python main.py --text           # Plain terminal REPL with streaming output
 
 ## 🔧 Configuration
 
-All configuration is done via **environment variables**. Set them in your shell profile (`~/.zshrc`) or prefix commands with them.
+Connection endpoints, API keys, voice options, and safety settings use **environment variables**. Set them in your shell profile (`~/.zshrc`) or prefix commands with them. Provider/model selection is also available in the GUI; its last selection is saved locally (no credentials). Explicit model/provider environment variables override saved GUI preferences on the next launch. Finder launches do not necessarily inherit your shell profile, so launch from your configured Terminal when using a gateway.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -301,6 +345,8 @@ All configuration is done via **environment variables**. Set them in your shell 
 | `WHISPER_COMPUTE` | `int8` | Compute type: `int8`, `float16`, `float32` |
 | `JARVIS_SILENCE_TIMEOUT` | `2.0` | Seconds of silence before the voice command is submitted |
 | `JARVIS_VAD_THRESHOLD` | `0.012` | RMS energy threshold for voice activity detection |
+| `JARVIS_WAKE_MODE` | `always` | `always`, `phrase_or_clap`, `phrase`, or `clap`; also changeable in the GUI for the current session |
+| `JARVIS_CLAP_THRESHOLD` | `0.08` | RMS threshold for each of the two clap-like impulses |
 | `JARVIS_VOICE` | `Samantha` | macOS TTS voice name |
 | `JARVIS_RATE` | `210` | TTS speech rate (words per minute) |
 | `JARVIS_CONFIRM_SHELL` | `1` | Set to `0` to disable shell command confirmation prompts |

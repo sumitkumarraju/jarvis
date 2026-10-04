@@ -1,11 +1,28 @@
 #!/bin/bash
-# Jarvis launcher — runs from anywhere.
-set -e
-JARVIS_DIR="/Users/skr/KILO/jarvis"
+# Portable launcher; all dependencies stay in this project's virtual environment.
+set -euo pipefail
+JARVIS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$JARVIS_DIR"
-if [ ! -d ".venv" ]; then
-    echo "Setting up venv on first run..."
-    python3 -m venv .venv
-    .venv/bin/pip install -q -r requirements.txt
+if [ ! -x ".venv/bin/python" ]; then
+    PYTHON="${JARVIS_PYTHON:-}"
+    if [ -z "$PYTHON" ]; then
+        for candidate in python3.11 python3.12 python3.13 python3; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+                PYTHON="$candidate"
+                break
+            fi
+        done
+    fi
+    if [ -z "$PYTHON" ]; then
+        echo "Install Python 3.11 or newer, then launch Jarvis again." >&2
+        exit 1
+    fi
+    echo "First launch: creating a local Python environment..."
+    "$PYTHON" -m venv .venv
+    echo "Installing Jarvis dependencies. This may take a few minutes..."
+    if ! .venv/bin/python -m pip install -r requirements.txt; then
+        echo "Setup failed. Retry with: .venv/bin/python -m pip install -r requirements.txt" >&2
+        exit 1
+    fi
 fi
 exec .venv/bin/python main.py "$@"

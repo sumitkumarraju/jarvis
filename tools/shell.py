@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from config import CONFIRM_SHELL, WORKDIR
+from webui.permissions import request_shell_confirmation
 
 console = Console()
 
@@ -18,8 +19,11 @@ def run_shell(command: str) -> str:
         return f"Refused: command matches dangerous pattern. Ask the user to run manually: {command}"
 
     if CONFIRM_SHELL:
-        console.print(f"[yellow]Run shell:[/yellow] [bold]{command}[/bold]")
-        if not Confirm.ask("Allow?", default=False):
+        approved = request_shell_confirmation(command)
+        if approved is None:
+            console.print(f"[yellow]Run shell:[/yellow] [bold]{command}[/bold]")
+            approved = Confirm.ask("Allow?", default=False)
+        if not approved:
             return "User denied execution."
 
     try:
